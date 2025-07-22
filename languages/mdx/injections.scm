@@ -8,40 +8,69 @@
     (language) @injection.language)
   (code_fence_content) @injection.content)
 
-(document . (section . (thematic_break) (_) @injection.content (thematic_break)) (#set! injection.language "yaml"))
+((markdown_inline) @injection.content
+ (#set! injection.language "markdown-inline"))
 
 ((minus_metadata) @injection.content (#set! injection.language "yaml"))
 
 ((plus_metadata) @injection.content (#set! injection.language "toml"))
 
-((markdown_inline) @injection.content (#set! injection.language "markdown_inline"))
-
 ; JavaScript
 ; ==========
 
-; Parse the contents of tagged template literals using
-; a language inferred from the tag.
+((regex) @injection.content
+  (#set! injection.language "regex"))
 
 (call_expression
-  function: [
-    (identifier) @injection.language
-    (member_expression
-      property: (property_identifier) @injection.language)
-  ]
-  arguments: (template_string (string_fragment) @injection.content)
-  (#set! injection.combined)
-  (#set! injection.include-children))
+  function: (identifier) @_name (#eq? @_name "css")
+  arguments: (template_string (string_fragment) @injection.content
+                              (#set! injection.language "css"))
+)
 
-
-; Parse regex syntax within regex literals
-
-((regex_pattern) @injection.content
- (#set! injection.language "regex"))
-
-; Parse Ember/Glimmer/Handlebars/HTMLBars/etc. template literals
-; e.g.: await render(hbs`<SomeComponent />`)
 (call_expression
-  function: ((identifier) @_name
-             (#eq? @_name "hbs"))
-  arguments: ((template_string) @glimmer
-              (#offset! @glimmer 0 1 0 -1)))
+  function: (identifier) @_name (#eq? @_name "html")
+  arguments: (template_string) @injection.content
+                              (#set! injection.language "html")
+)
+
+(call_expression
+  function: (identifier) @_name (#eq? @_name "js")
+  arguments: (template_string (string_fragment) @injection.content
+                              (#set! injection.language "javascript"))
+)
+
+(call_expression
+  function: (identifier) @_name (#eq? @_name "json")
+  arguments: (template_string (string_fragment) @injection.content
+                              (#set! injection.language "json"))
+)
+
+(call_expression
+  function: (identifier) @_name (#eq? @_name "sql")
+  arguments: (template_string (string_fragment) @injection.content
+                              (#set! injection.language "sql"))
+)
+
+(call_expression
+  function: (identifier) @_name (#eq? @_name "ts")
+  arguments: (template_string (string_fragment) @injection.content
+                              (#set! injection.language "typescript"))
+)
+
+(call_expression
+  function: (identifier) @_name (#match? @_name "^ya?ml$")
+  arguments: (template_string (string_fragment) @injection.content
+                              (#set! injection.language "yaml"))
+)
+
+(call_expression
+  function: (identifier) @_name (#match? @_name "^g(raph)?ql$")
+  arguments: (template_string (string_fragment) @injection.content
+                              (#set! injection.language "graphql"))
+)
+
+(call_expression
+  function: (identifier) @_name (#match? @_name "^g(raph)?ql$")
+  arguments: (arguments (template_string (string_fragment) @injection.content
+                              (#set! injection.language "graphql")))
+)
