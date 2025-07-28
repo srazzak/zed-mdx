@@ -8,12 +8,14 @@
     (language) @injection.language)
   (code_fence_content) @injection.content)
 
-((markdown_inline) @injection.content
- (#set! injection.language "markdown-inline"))
+(document . (section . (thematic_break) (_) @injection.content (thematic_break)) (#set! injection.language "yaml"))
 
 ((minus_metadata) @injection.content (#set! injection.language "yaml"))
 
 ((plus_metadata) @injection.content (#set! injection.language "toml"))
+
+((markdown_inline) @injection.content
+ (#set! injection.language "markdown-inline"))
 
 ; JavaScript
 ; ==========

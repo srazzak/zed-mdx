@@ -11,5 +11,5 @@ name = "MDX Language Server"
 language = "MDX"
 
 [grammars.mdx]
-repository = "file:///Users/suhail/tree-sitter-mdx"
-rev = "f724d13bdba53edf28c6969fc95271a8c4e1ac6a"
+repository = "https://github.com/srazzak/tree-sitter-mdx"
+rev = "9d7385fcfd5def3c24e09edcc5fad4af4ac28ed6"
