@@ -48,3 +48,5 @@
     parameters: (formal_parameters
       "(" @context
       ")" @context)) @item
+
+(comment) @annotation

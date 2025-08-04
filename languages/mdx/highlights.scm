@@ -94,6 +94,8 @@
   (false)
 ] @boolean
 
+(comment) @comment
+
 [
   (string)
   (template_string)
