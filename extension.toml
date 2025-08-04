@@ -1,7 +1,7 @@
 id = "mdx"
 name = "MDX"
 description = "MDX support"
-version = "0.1.0"
+version = "0.2.0"
 schema_version = 1
 authors = ["Suhail Razzak <suhail.razzak@gmail.com>"]
 repository = "https://github.com/srazzak/zed-mdx"
@@ -12,4 +12,4 @@ language = "MDX"
 
 [grammars.mdx]
 repository = "https://github.com/srazzak/tree-sitter-mdx"
-rev = "9d7385fcfd5def3c24e09edcc5fad4af4ac28ed6"
+rev = "757563ca1d1c5afd87992e77f7b865e27d61943d"
