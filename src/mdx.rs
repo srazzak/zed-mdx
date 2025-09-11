@@ -1,4 +1,4 @@
-use std::{fs, env};
+use std::{env, fs};
 use zed_extension_api::{self as zed, settings::LspSettings};
 
 struct MDXExtension;
@@ -56,7 +56,14 @@ impl zed::Extension for MDXExtension {
             .and_then(|options| options.as_object().cloned());
 
         let cwd = env::current_dir();
-        let zed_cwd = cwd.unwrap().ancestors().nth(3).unwrap().join("languages/vtsls/node_modules/typescript/lib").to_string_lossy().to_string();
+        let zed_cwd = cwd
+            .unwrap()
+            .ancestors()
+            .nth(3)
+            .unwrap()
+            .join("languages/vtsls/node_modules/typescript/lib")
+            .to_string_lossy()
+            .to_string();
 
         let ts_enabled = init_options
             .as_ref()
