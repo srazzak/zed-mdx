@@ -12,4 +12,4 @@ language = "MDX"
 
 [grammars.mdx]
 repository = "https://github.com/srazzak/tree-sitter-mdx"
-rev = "757563ca1d1c5afd87992e77f7b865e27d61943d"
+rev = "0f2d4b204b231e5ebb7b94ff0259bee6c83ebc58"
