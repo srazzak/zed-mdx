@@ -1,2 +1,12 @@
+#
+# zed-mdx
+#
+
+*.wasm
+
+#
+# Rust
+#
+
 /target
 grammars/
