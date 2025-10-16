@@ -1,100 +1,207 @@
+use std::collections::HashMap;
 use std::{env, fs};
-use zed_extension_api::{self as zed, settings::LspSettings};
 
-struct MDXExtension;
+use serde::Deserialize;
+use zed_extension_api::serde_json::json;
+use zed_extension_api::{self as zed, Worktree, serde_json, settings::LspSettings};
 
 const PACKAGE_NAME: &str = "@mdx-js/language-server";
-const SERVER_PATH: &str = "node_modules/.bin/mdx-language-server";
-const SERVER_NAME: &str = "language-server";
+const SERVER_PATH: &str = "node_modules/@mdx-js/language-server/lib/index.js";
+
+const TYPESCRIPT_PACKAGE_NAME: &str = "typescript";
+const TS_PLUGIN_PACKAGE_NAME: &str = "@mdx-js/typescript-plugin";
+
+/// The relative path to TypeScript's SDK.
+const TYPESCRIPT_TSDK_PATH: &str = "node_modules/typescript/lib";
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PackageJson {
+    #[serde(default)]
+    dependencies: HashMap<String, String>,
+    #[serde(default)]
+    dev_dependencies: HashMap<String, String>,
+}
+
+struct MDXExtension {
+    did_find_server: bool,
+    typescript_tsdk_path: String,
+}
 
 impl MDXExtension {
     fn server_exists(&self) -> bool {
-        fs::metadata(SERVER_PATH).is_ok_and(|m| m.is_file())
+        fs::metadata(SERVER_PATH).map_or(false, |stat| stat.is_file())
     }
 
     fn server_script_path(
         &mut self,
         language_server_id: &zed_extension_api::LanguageServerId,
+        worktree: &zed::Worktree,
     ) -> zed::Result<String> {
-        if !self.server_exists() {
+        let server_exists = self.server_exists();
+        if self.did_find_server && server_exists {
+            self.install_typescript_if_needed(worktree)?;
+            self.install_ts_plugin_if_needed()?;
+            return Ok(SERVER_PATH.to_string());
+        }
+
+        zed::set_language_server_installation_status(
+            language_server_id,
+            &zed::LanguageServerInstallationStatus::CheckingForUpdate,
+        );
+        let version = zed::npm_package_latest_version(PACKAGE_NAME)?;
+
+        if !server_exists
+            || zed::npm_package_installed_version(PACKAGE_NAME)?.as_ref() != Some(&version)
+        {
             zed::set_language_server_installation_status(
                 language_server_id,
-                &zed::LanguageServerInstallationStatus::CheckingForUpdate,
+                &zed::LanguageServerInstallationStatus::Downloading,
             );
-            let version = zed::npm_package_latest_version(PACKAGE_NAME)?;
-
-            if zed::npm_package_installed_version(PACKAGE_NAME)?.as_ref() != Some(&version) {
-                zed::set_language_server_installation_status(
-                    language_server_id,
-                    &zed::LanguageServerInstallationStatus::Downloading,
-                );
-                let result = zed::npm_install_package(PACKAGE_NAME, &version);
-                if !self.server_exists() {
-                    return result.and_then(|_| Err(format!("installed package '{PACKAGE_NAME}' did not contain expected path '{SERVER_PATH}'")));
+            let result = zed::npm_install_package(PACKAGE_NAME, &version);
+            match result {
+                Ok(()) => {
+                    if !self.server_exists() {
+                        Err(format!(
+                            "installed package '{PACKAGE_NAME}' did not contain expected path '{SERVER_PATH}'",
+                        ))?;
+                    }
+                }
+                Err(error) => {
+                    if !self.server_exists() {
+                        Err(error)?;
+                    }
                 }
             }
         }
 
+        self.install_typescript_if_needed(worktree)?;
+        self.did_find_server = true;
         Ok(SERVER_PATH.to_string())
+    }
+
+    /// Returns whether a local copy of TypeScript exists in the worktree.
+    fn typescript_exists_for_worktree(&self, worktree: &zed::Worktree) -> zed::Result<bool> {
+        let package_json = worktree.read_text_file("package.json")?;
+        let package_json: PackageJson = serde_json::from_str(&package_json)
+            .map_err(|err| format!("failed to parse package.json: {err}"))?;
+
+        let dev_dependencies = &package_json.dev_dependencies;
+        let dependencies = &package_json.dependencies;
+
+        // Since the extension is not allowed to read the filesystem within the project
+        // except through the worktree (which does not contains `node_modules`), we check
+        // the `package.json` to see if `typescript` is listed in the dependencies.
+        Ok(dev_dependencies.contains_key(TYPESCRIPT_PACKAGE_NAME)
+            || dependencies.contains_key(TYPESCRIPT_PACKAGE_NAME))
+    }
+
+    fn install_typescript_if_needed(&mut self, worktree: &zed::Worktree) -> zed::Result<()> {
+        if self
+            .typescript_exists_for_worktree(worktree)
+            .unwrap_or_default()
+        {
+            println!("found local TypeScript installation at '{TYPESCRIPT_TSDK_PATH}'");
+            return Ok(());
+        }
+
+        let installed_typescript_version =
+            zed::npm_package_installed_version(TYPESCRIPT_PACKAGE_NAME)?;
+        let latest_typescript_version = zed::npm_package_latest_version(TYPESCRIPT_PACKAGE_NAME)?;
+
+        if installed_typescript_version.as_ref() != Some(&latest_typescript_version) {
+            println!("installing latest version ({latest_typescript_version})");
+            zed::npm_install_package(TYPESCRIPT_PACKAGE_NAME, &latest_typescript_version)?;
+        } else {
+            println!("TypeScript already installed");
+        }
+
+        self.typescript_tsdk_path = env::current_dir()
+            .unwrap()
+            .join(TYPESCRIPT_TSDK_PATH)
+            .to_string_lossy()
+            .to_string();
+        Ok(())
+    }
+
+    fn install_ts_plugin_if_needed(&mut self) -> zed::Result<()> {
+        let installed_plugin_version = zed::npm_package_installed_version(TS_PLUGIN_PACKAGE_NAME)?;
+        let latest_plugin_version = zed::npm_package_latest_version(TS_PLUGIN_PACKAGE_NAME)?;
+
+        if installed_plugin_version.as_ref() != Some(&latest_plugin_version) {
+            println!("installing {TS_PLUGIN_PACKAGE_NAME}@{latest_plugin_version}");
+            zed::npm_install_package(TS_PLUGIN_PACKAGE_NAME, &latest_plugin_version)?;
+        } else {
+            println!("typescript-plugin already installed");
+        }
+
+        Ok(())
+    }
+
+    fn get_ts_plugin_root_path(&self, worktree: &zed::Worktree) -> zed::Result<Option<String>> {
+        let package_json = worktree.read_text_file("package.json")?;
+        let package_json: PackageJson = serde_json::from_str(&package_json)
+            .map_err(|err| format!("failed to parse package.json: {err}"))?;
+
+        let has_local_plugin = package_json
+            .dev_dependencies
+            .contains_key(TS_PLUGIN_PACKAGE_NAME)
+            || package_json
+                .dependencies
+                .contains_key(TS_PLUGIN_PACKAGE_NAME);
+
+        if has_local_plugin {
+            println!("Using local installation of {TS_PLUGIN_PACKAGE_NAME}");
+            return Ok(None);
+        }
+
+        println!("Using global installation of {TS_PLUGIN_PACKAGE_NAME}");
+        Ok(Some(
+            env::current_dir().unwrap().to_string_lossy().to_string(),
+        ))
     }
 }
 
 impl zed::Extension for MDXExtension {
     fn new() -> Self {
-        Self
+        Self {
+            did_find_server: false,
+            typescript_tsdk_path: TYPESCRIPT_TSDK_PATH.to_owned(),
+        }
     }
 
     fn language_server_initialization_options(
         &mut self,
-        _: &zed::LanguageServerId,
+        _language_server_id: &zed::LanguageServerId,
         worktree: &zed::Worktree,
-    ) -> zed::Result<Option<zed::serde_json::Value>> {
-        let init_options = LspSettings::for_worktree(SERVER_NAME, worktree)
+    ) -> zed::Result<Option<serde_json::Value>> {
+        let init_options = LspSettings::for_worktree("mdx", worktree)
             .ok()
             .and_then(|settings| settings.initialization_options)
-            .and_then(|options| options.get("typescript").cloned())
-            .and_then(|options| options.as_object().cloned());
+            .unwrap_or_else(|| {
+                json!({
+                  "typescript": {
+                    "enabled": true,
+                    "tsdk": self.typescript_tsdk_path
+                  },
+                  "mdx": {
+                    "checkMdx": true,
+                  },
+                  "jsx": {
+                    "enabled": true
+                  }
+                })
+            });
 
-        let cwd = env::current_dir();
-        let zed_cwd = cwd
-            .unwrap()
-            .ancestors()
-            .nth(3)
-            .unwrap()
-            .join("languages/vtsls/node_modules/typescript/lib")
-            .to_string_lossy()
-            .to_string();
-
-        let ts_enabled = init_options
-            .as_ref()
-            .and_then(|options| options.get("enabled").and_then(|enabled| enabled.as_bool()))
-            .unwrap_or(true);
-        let tsdk_path = init_options
-            .as_ref()
-            .and_then(|options| {
-                options
-                    .get("tsdk")
-                    .and_then(|tsdk| tsdk.as_str())
-                    .map(|s| s.to_owned())
-                    .clone()
-            })
-            .unwrap_or(zed_cwd);
-
-        Ok(Some(zed::serde_json::json!({
-            "typescript": {
-                "enabled": ts_enabled,
-                "tsdk": tsdk_path,
-            },
-        })))
+        Ok(Some(init_options))
     }
 
     fn language_server_command(
         &mut self,
         language_server_id: &zed::LanguageServerId,
-        _: &zed::Worktree,
+        worktree: &zed::Worktree,
     ) -> zed::Result<zed::Command> {
-        let server_path = self.server_script_path(language_server_id)?;
-
+        let server_path = self.server_script_path(language_server_id, worktree)?;
         Ok(zed::Command {
             command: zed::node_binary_path()?,
             args: vec![
@@ -107,6 +214,47 @@ impl zed::Extension for MDXExtension {
             ],
             env: Default::default(),
         })
+    }
+
+    fn language_server_additional_initialization_options(
+        &mut self,
+        _language_server_id: &zed_extension_api::LanguageServerId,
+        target_language_server_id: &zed_extension_api::LanguageServerId,
+        worktree: &Worktree,
+    ) -> zed_extension_api::Result<Option<serde_json::Value>> {
+        match target_language_server_id.as_ref() {
+            "typescript-language-server" => Ok(Some(serde_json::json!({
+              "plugins": [{
+                "name": "@mdx-js/typescript-plugin",
+                "location": self.get_ts_plugin_root_path(worktree)?.unwrap_or_else(|| worktree.root_path()),
+                "languages": ["typescript", "mdx"],
+              }],
+            }))),
+            _ => Ok(None),
+        }
+    }
+
+    fn language_server_additional_workspace_configuration(
+        &mut self,
+        _language_server_id: &zed_extension_api::LanguageServerId,
+        target_language_server_id: &zed_extension_api::LanguageServerId,
+        worktree: &Worktree,
+    ) -> zed_extension_api::Result<Option<serde_json::Value>> {
+        match target_language_server_id.as_ref() {
+            "vtsls" => Ok(Some(serde_json::json!({
+              "vtsls": {
+                "tsserver": {
+                  "globalPlugins": [{
+                    "name": "@mdx-js/typescript-plugin",
+                    "location": self.get_ts_plugin_root_path(worktree)?.unwrap_or_else(|| worktree.root_path()),
+                    "enableForWorkspaceTypeScriptVersions": true,
+                    "languages": ["typescript", "mdx"],
+                  }]
+                }
+              },
+            }))),
+            _ => Ok(None),
+        }
     }
 }
 
