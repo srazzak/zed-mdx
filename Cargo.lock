@@ -741,7 +741,7 @@ dependencies = [
 
 [[package]]
 name = "zed-mdx"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
  "zed_extension_api",
