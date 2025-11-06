@@ -10,4 +10,5 @@ path = "src/mdx.rs"
 crate-type = ["cdylib"]
 
 [dependencies]
+serde = "1.0.226"
 zed_extension_api = "0.4.0"
