@@ -6,8 +6,8 @@ schema_version = 1
 authors = ["Suhail Razzak <suhail.razzak@gmail.com>"]
 repository = "https://github.com/srazzak/zed-mdx"
 
-[language_servers.mdx-language-server]
-name = "MDX Language Server"
+[language_servers.mdx-analyzer]
+name = "MDX Analyzer"
 language = "MDX"
 
 [grammars.mdx]
