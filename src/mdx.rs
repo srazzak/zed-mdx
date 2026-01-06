@@ -4,7 +4,7 @@ use zed_extension_api::serde_json::json;
 use zed_extension_api::settings::LspSettings;
 use zed_extension_api::{self as zed, Result, serde_json};
 
-const SERVER_PATH: &str = "node_modules/.bin/mdx-language-server";
+const SERVER_PATH: &str = "node_modules/@mdx-js/language-server/lib/index.js";
 const PACKAGE_NAME: &str = "@mdx-js/language-server";
 
 const TYPESCRIPT_PACKAGE_NAME: &str = "typescript";
